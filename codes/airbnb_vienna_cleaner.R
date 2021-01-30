@@ -1,4 +1,12 @@
-##### THIS IS THE CLEANING SCRIPT FOR THE AIRBNB VIENNA DATA
+#############################################################
+############# VIENNA AIRBNB CLEANING SCRIPT #################
+#############################################################
+
+
+############################
+######     SETUP      ######
+############################
+
 
 
 # load libraries
@@ -13,6 +21,16 @@ data_out <- paste0(dir,"/data/clean/")
 
 # load data
 df <- read_csv(paste0(dir,'/data/raw/listings.csv.gz'))
+
+
+
+############################
+######      CLEAN     ######
+######    FEATURES    ######
+######        &       ######
+######     DISCARD    ######
+######    JUNK OBS    ######
+############################
 
 
 
@@ -51,11 +69,6 @@ df <-
   mutate(room_type = ifelse(room_type == 'Entire home/apt', 'Entire apartment', room_type))
 
 
-# strip dollar signs from price column by taking substring starting at second position
-df <-
-  df %>% 
-  mutate(price = str_sub(price, start = 2))
-
 
 # consider how to handle bathroom_text column. first look at potential values
 table(df$bathrooms_text)
@@ -86,9 +99,23 @@ df <-
   filter(accommodates %in% 2:6)
 
 
+
+############################
+######      CLEAN     ######
+######   Y VARIABLE   ######
+######      PRICE     ######
+############################
+
+
+
 # let's take a look at our target variable, price
 
-# first convert to numeric
+# strip dollar signs from price column by taking substring starting at second position
+df <-
+  df %>% 
+  mutate(price = str_sub(price, start = 2))
+
+# convert to numeric
 df$price <- as.numeric(df$price)
 
 # check for NAs, it turns out there are 19. small number, let's drop them
@@ -114,6 +141,17 @@ df <-
 df <-
   df %>% 
   mutate(ln_price = log(price))
+
+
+
+############################
+######    EXPLORE     ######
+######    NUMERICS    ######
+######  ASSOCIATION   ######
+######      WITH      ######
+######      PRICE     ######
+############################
+
 
 
 # look at relationships between meaningful numerics and price
@@ -143,8 +181,10 @@ df %>%
   ggplot(aes(x  = number_of_reviews, y = price)) +
   geom_point(alpha = 0.5)
 
-# reviews: how about with logs? - doesn't look like a meaningful pattern of association at all
-# but it's a very crowded scatterplot. I'll take log of reviews and see if it helps the model
+# reviews: how about with logs? - doesn't look like a meaningful pattern of association...
+# but it's a very crowded scatterplot... can't really tell if there are any patterns in there 
+# I'll take log of number_of_reviews on account of its skewed distribution 
+# and see if it helps during model evaluation phase
 df %>% 
   ggplot(aes(x = log(number_of_reviews), y = log(price))) +
   geom_point(alpha = 0.5)
@@ -153,12 +193,21 @@ df %>%
 # the client is introducing new apartments to the market which will not have any reviews...
 # and we don't know what the clients review scores will be (overall, cleanliness, etc)
 
+
 # take log of number of reviews, but no further transformations of numeric variables necessary
+# add a small contant to number_of_reviews to avoid getting -Inf for obs of 0
 df <-
   df %>% 
   mutate(ln_num_reviews = log(number_of_reviews + 0.01))
 
 
+
+############################
+######    FEATURE     ######
+######  ENGINEERING:  ######
+######  BINARY VARS   ###### 
+######  FOR AMENITIES ######
+############################
   
   
 
@@ -178,6 +227,7 @@ df <-
          amenities,
          price,
          instant_bookable,
+         number_of_reviews,
          shared_bathroom,
          ln_price,
          ln_num_reviews)
@@ -263,6 +313,15 @@ vars_to_drop <- c('Cable TV',
 df <- 
     df %>% 
     select(-vars_to_drop)
-  
+
+
+
+############################
+######      SAVE      ######
+######   CLEAN CSV    ######
+############################
+
+
+
 # write out a clean CSV
 write_csv(df, paste0(data_out,'airbnb_vienna_midsize_clean.csv'))
