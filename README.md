@@ -1,4 +1,4 @@
-# AirBnB Price Prediction - Vienna
+# AirBnb Price Prediction - Vienna
 
 This project aims to predict prices for mid-size apartments in Vienna, and use these predictions to provide a client with pricing guidance for their new apartments they are bringing to the market.
 
