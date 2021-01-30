@@ -212,6 +212,7 @@ df <-
   
 
 # drop a bunch of variables we won't use to make wrangling amenities a little easier
+# do this by selecting only the variables we are interested in
 df <- 
   df %>% 
   select(id, 
