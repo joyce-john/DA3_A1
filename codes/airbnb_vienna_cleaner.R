@@ -29,7 +29,7 @@ df <- read_csv(paste0(dir,'/data/raw/listings.csv.gz'))
 ######    FEATURES    ######
 ######        &       ######
 ######     DISCARD    ######
-######    JUNK OBS    ######
+######    SOME OBS    ######
 ############################
 
 
@@ -54,7 +54,7 @@ df <-
   df %>%
   filter(property_type == 'Apartment')
 
-# look at roomtypes
+# look at room_type
 # apartments are not hotels and do not have hotel rooms, we should discard 'Hotel room' obs
 table(df$room_type)
 
@@ -77,7 +77,7 @@ table(df$bathrooms_text)
 df <- 
   df %>% filter(bathrooms_text != '0 baths' & bathrooms_text != '0 shared baths')
 
-# looks turn all other values into numbers and add a flag for 'shared bathoom'
+# looks turn all other values into numbers and add a flag for 'shared bathroom'
 df <-
   df %>% 
   mutate(bathrooms = str_extract(bathrooms_text, '\\d\\.*\\d*')) 
@@ -176,12 +176,12 @@ df %>%
   ggplot(aes(x = beds, y = price)) +
   geom_point(alpha = 0.5)
 
-# reviews
+# number of reviews
 df %>% 
   ggplot(aes(x  = number_of_reviews, y = price)) +
   geom_point(alpha = 0.5)
 
-# reviews: how about with logs? - doesn't look like a meaningful pattern of association...
+# number of reviews: how about with logs? - doesn't look like a meaningful pattern of association...
 # but it's a very crowded scatterplot... can't really tell if there are any patterns in there 
 # I'll take log of number_of_reviews on account of its skewed distribution 
 # and see if it helps during model evaluation phase
@@ -195,7 +195,7 @@ df %>%
 
 
 # take log of number of reviews, but no further transformations of numeric variables necessary
-# add a small contant to number_of_reviews to avoid getting -Inf for obs of 0
+# add a small constant to number_of_reviews to avoid getting value of -Inf for obs of 0
 df <-
   df %>% 
   mutate(ln_num_reviews = log(number_of_reviews + 0.01))
@@ -237,12 +237,29 @@ df <-
 # creating dummy variables for amenities
 
 # first create unique list of all amenities in the data
+# the regex pattern is particular to this data - it captures amenities up to 8 words in length
 amenities_unique <- 
   unique(
     unlist(
-      df$amenities %>% str_extract_all('(?<=")(\\w+\\s*\\w*\\s*\\w*)(?=")')
+      df$amenities %>% str_extract_all('(?<=")(\\w+\\s*\\w*\\s*\\w*\\s*\\w*\\s*\\w*\\s*\\w*\\s*\\w*\\s*\\w*\\s*\\w*\\s*)(?=")')
     )
   )
+
+
+##### NOT RUN #####
+# below is cleaner regex expression with a more general pattern
+# it may be useful on other Airbnb data because the pattern is broader
+# however, it takes 10x longer to run because of the * after a regex group
+
+# amenities_unique <- 
+#   unique(
+#     unlist(
+#       df$amenities %>% str_extract_all('(?<=")(\\w+\\s*)*(?=")')
+#     )
+#   )
+
+
+
 
 # then iterate over the list and create a new column for each unique amenity and fill values with this logic:
 # in the new column, if the amenity is detected as a string in the original "amenities" at this row, set value to 1
@@ -253,8 +270,8 @@ for (i in amenities_unique){
     mutate(!! i := ifelse(str_detect(amenities, !! i), 1, 0))
 }
 
-# mutate columns to aggregate refrigerators, ovens, stove of different types
-# this checks for any type of refrigerator, oven or stove unit and sets value to 1 if present
+# mutate columns to aggregate amenities - refrigerators, ovens, stoves of different types
+# this checks for any type of refrigerator, oven or stove unit, etc. and sets value to 1 if present
 # example: Refrigerator = 1 if it is a refrigerator, Siemens refrigerator, Gorenje refrigerator, Miele refrigerator, etc...
 df <-
   df %>% 
@@ -263,11 +280,15 @@ df <-
   mutate(Stove = ifelse(str_detect(amenities, "Stove|stove"), 1, 0)) %>% 
   mutate(`Body Soap` = ifelse(str_detect(amenities, "Body soap|body soap|Shower gel"), 1, 0)) %>% 
   mutate(Shampoo = ifelse(str_detect(amenities, "Shampoo|shampoo"), 1, 0)) %>% 
-  mutate(Conditioner = ifelse(str_detect(amenities, "Conditioner|conditioner"), 1, 0))
+  mutate(Conditioner = ifelse(str_detect(amenities, "Conditioner|conditioner"), 1, 0)) %>% 
   mutate(Netflix = ifelse(str_detect(amenities, "Netflix|netflix"), 1, 0)) %>% 
+  mutate(`Amazon Prime Video` = ifelse(str_detect(amenities, "Amazon Prime Video"), 1, 0)) %>% 
   mutate(`Air conditioning` = ifelse(str_detect(amenities, "Air conditioning|air conditioning|Window AC"), 1, 0)) %>% 
   mutate(TV = ifelse(str_detect(amenities, "TV"), 1, 0)) %>% 
-  mutate(`Hot tub` = ifelse(str_detect(amenities, "Hot tub|hot tub"), 1, 0))
+  mutate(`Hot tub` = ifelse(str_detect(amenities, "Hot tub|hot tub"), 1, 0)) %>% 
+  mutate(`Sound system` = ifelse(str_detect(amenities, "Sound system|sound system"), 1, 0)) %>% 
+  mutate(`Free parking` = ifelse(str_detect(amenities, "Parking|parking") & str_detect(amenities, "Free|free"), 1, 0)) %>% 
+  mutate(`Paid parking` = ifelse(str_detect(amenities, "Parking|parking") & str_detect(amenities, "Paid|paid"), 1, 0))
 
 
 # drop aggregated vars we don't need anymore
@@ -308,12 +329,41 @@ vars_to_drop <- c('Cable TV',
                   'Bauknecht refrigerator',
                   'TV with Chromecast',
                   'Miele refrigerator',
+                  'Paid parking off premises',                           
+                  'Free parking on premises',                                                     
+                  'Paid parking on premises',                           
+                  'TV with standard cable',                              
+                  'Paid parking garage off premises',                   
+                  'Paid street parking off premises',                    
+                  'HDTV with standard cable',                           
+                  'Grundig Ovation sound system with aux',               
+                  'Stainless steel electric stove',                     
+                  'Paid parking lot on premises',                        
+                  'Sound system with aux',                              
+                  'Free parking garage on premises',                                            
+                  'Paid parking garage on premises',                     
+                  'Sound system with Bluetooth and aux',                
+                  'Samsung TV with integrated sound system sound system',
+                  'Philip Starck Parrot Bluetooth sound system',        
+                  'SAVON PUR VEGETAL ROSE DE MAI body soap',             
+                  'Stainless steel gas stove',                          
+                  'Gorenje stainless steel oven',                        
+                  'Paid parking lot off premises',                      
+                  'LG sound system with Bluetooth and aux',              
+                  'Yamaha Bluetooth sound system',                      
+                  'Gorenje stainless steel electric stove',              
+                  'HDTV with Amazon Prime Video',                       
+                  'Stainless steel induction stove',                     
+                  'Miele stainless steel oven',                         
+                  'Miele stainless steel induction stove',
+                  'Free street parking',        
+                  'Bluetooth sound system',                
                   'amenities') # we don't need this column anymore
 
 # drop the vars using the vector 
 df <- 
     df %>% 
-    select(-vars_to_drop)
+    select(-all_of(vars_to_drop))
 
 
 
