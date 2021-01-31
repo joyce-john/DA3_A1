@@ -3,6 +3,7 @@
 #############################################################
 
 
+
 ############################
 ######     SETUP      ######
 ############################
@@ -218,8 +219,6 @@ df <-
   select(id, 
          name, 
          neighbourhood_cleansed, 
-         latitude, 
-         longitude, 
          room_type, 
          accommodates,
          bathrooms,
@@ -364,6 +363,39 @@ vars_to_drop <- c('Cable TV',
 df <- 
     df %>% 
     select(-all_of(vars_to_drop))
+
+
+
+############################
+######   FINAL CHECK  ######
+######    FOR NAs     ######
+############################
+
+
+
+# now that we're done discarding variables, check the NA situation for the whole dataframe
+
+# count NAs for all columns except "id" and "name", which are just labels, not predictive features
+na_info <- 
+  df %>% 
+  select(-c('id', 'name')) %>% 
+  summarise_all(funs(sum(is.na(.))))
+
+# show NAs
+na_info[,colSums(na_info>0)>0]
+
+# two columns with NAs: beds and bedrooms
+# both variables are critical information...
+
+# there are 70 NAs in beds - this is small number in our 10k obs, so we can afford to drop these
+df <-
+  df %>% 
+  drop_na(beds)
+
+# How we will we deal 1131 NAs in bedrooms? This is big proportion of our data...
+# I don't think there is an easy way to impute this. You can't just assume that there is one bedroom for every two beds
+# There could be a systemic reason for missing data here, which would make simply imputing median values dangerous and misleading
+# I want to take a conservative approach: leave the observations in the data and set NA as factor level in the prediction script
 
 
 
