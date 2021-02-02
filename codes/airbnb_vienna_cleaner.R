@@ -364,6 +364,9 @@ df <-
     df %>% 
     select(-all_of(vars_to_drop))
 
+# rename columns: replace all spaces with underscores
+names(df) <- str_replace_all(names(df), '\\s', '_')
+
 
 
 ############################
