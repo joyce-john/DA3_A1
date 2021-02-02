@@ -390,6 +390,11 @@ rf_2 <- train(
 
 
 
+######################################
+#####    CROSS-VALIDATED RMSE    #####
+######################################
+
+
 # put all models into a list
 final_models <-
   list("OLS_1" = lm_1,
@@ -407,6 +412,12 @@ results$statistics$RMSE
 
 # LASSO and Random Forest (full model) have the lowest mean cross-validated RMSE
 
+
+######################################
+#####       TEST-SET RMSE        #####
+######################################
+
+
 # make predictions  on the **test set**
 predictions_lm_1 <- predict(lm_1, test_set)
 predictions_lm_2 <- predict(lm_2, test_set)
@@ -421,14 +432,18 @@ test_set_rmse <- data.frame('OLS_1' = RMSE(predictions_lm_1, test_set$price),
                             'OLS_3' = RMSE(predictions_lm_3, test_set$price),
                             'LASSO' = RMSE(predictions_lasso_1, test_set$price),
                             'Random_forest_basic' = RMSE(predictions_rf1, test_set$price),
-                            'Random_forest_full' = RMSE(predictions_rf2, test_set$price)
-)
+                            'Random_forest_full' = RMSE(predictions_rf2, test_set$price))
 
 # LASSO and Random Forest (full model) still have the best RMSE
 # and it's similar to the training set RMSE, which is a good sign that we didn't overfit
 print(test_set_rmse)
 
+# The winner? Random forest (full model) for having the lowest RMSE.
 
+
+##################################################
+#####        DIAGNOSTICS: Y-hat VS Y         #####
+##################################################
 
 # LASSO - scatterplot of predicted VS actual values
 lasso_pred_vs_actual <- 
@@ -463,9 +478,9 @@ lasso_pred_vs_actual
 rf_2_pred_vs_actual
 
 
-
-
-
+##########################################################
+#####        DIAGNOSTICS: LASSO COEFFICIENTS         #####
+##########################################################
 
 
 # get the coefficients from the LASSO model
@@ -484,16 +499,25 @@ lasso_coeffs_nz <- lasso_coeffs %>% filter(coefficient!=0)
 # there are 184 non-zero coefficients
 print(nrow(lasso_coeffs_nz))
 
-# view the top 10 LASSO coefficients
-lasso_coeffs %>% 
+# get the top 10 LASSO coefficients
+lasso_top10_coef <-
+  lasso_coeffs %>% 
   arrange(desc(coefficient)) %>% 
   head(., n = 10)
+
+# view the top 10 LASSO coefficients
+lasso_top10_coef
 
 # some of these make perfect sense such as accomoodates, TV, Air_conditioning
 # but it's surprising to see that Innere Stadt bathrooms could be so significant
 
 
+#########################################################################
+#####        DIAGNOSTICS: RANDOM FOREST VARIABLE IMPORTANCE         #####
+#########################################################################
 
+
+# calculate random forest variable importance as a percentage
 rf_2_var_imp <- importance(rf_2$finalModel)/1000
 rf_2_var_imp_df <-
   data.frame(varname = names(rf_2_var_imp), imp = rf_2_var_imp) %>%
@@ -522,7 +546,9 @@ rf_2_var_imp_plot <- ggplot(rf_2_var_imp_df[1:10,], aes(x=reorder(varname, imp),
 rf_2_var_imp_plot
 
 
-
+#########################################################################
+#####         DIAGNOSTICS: RANDOM FOREST PARTIAL DEPENDENCE          ####
+#########################################################################
 
 
 # partial dependence plot for number of people it accommodates
