@@ -25,6 +25,7 @@
 # load libraries
 library(tidyverse)
 library(caret)
+library(ranger)
 
 
 # SET WORKING DIRECTORY  TO YOUR PREFERRED PATH
@@ -210,9 +211,9 @@ p5
 
 
 ################################################################################
-###################                  PREPARE                    ################
 ###################                  FORMULAS                   ################
 ###################              MODEL PARAMETERS               ################
+###################              TRAIN & TEST SETS              ################
 ################################################################################
 
 
@@ -313,6 +314,25 @@ tune_grid_rf_full <- expand.grid(
 # setting train control for RF - the same as previous train control but with verboseIter = TRUE
 # so I can see the progress
 train_control_rf <- trainControl(method = "cv", number = 5, verboseIter = TRUE)
+
+
+################################
+#####    TRAIN/TEST SETS    ####
+################################
+
+
+# set the seed for reproducibility
+set.seed(1991)
+
+# create an index for splitting the data. let's do a classic 80/20 split
+# use as.integer() to coerce the matrix into a vector
+index <- as.integer(
+  createDataPartition(df$price, times = 1, p = 0.8, list = FALSE)
+)
+
+# create sets with index
+train_set <- df[index,]
+test_set <- df[-index,]
 
 
 
@@ -455,7 +475,7 @@ lasso_pred_vs_actual <-
   coord_cartesian(xlim = c(0, 350), ylim = c(0, 350)) +
   scale_x_continuous(expand = c(0.01,0.01),limits=c(0, 350), breaks=seq(0, 350, by=50)) +
   scale_y_continuous(expand = c(0.01,0.01),limits=c(0, 350), breaks=seq(0, 350, by=50)) +
-  labs(title = 'LASSO', y = "Price (US dollars)", x = "Predicted price  (US dollars)") +
+  labs(title = 'LASSO', y = "Price (EUR)", x = "Predicted price  (EUR)") +
   theme(plot.title = element_text(hjust = 0.5))
 
 # RANDOM FOREST (full) - scatterplot of predicted VS actual values
@@ -468,7 +488,7 @@ rf_2_pred_vs_actual <-
   coord_cartesian(xlim = c(0, 350), ylim = c(0, 350)) +
   scale_x_continuous(expand = c(0.01,0.01),limits=c(0, 350), breaks=seq(0, 350, by=50)) +
   scale_y_continuous(expand = c(0.01,0.01),limits=c(0, 350), breaks=seq(0, 350, by=50)) +
-  labs(title = 'Random Forest (full model)', y = "Price (US dollars)", x = "Predicted price  (US dollars)") +
+  labs(title = 'Random Forest (full model)', y = "Price (EUR)", x = "Predicted price  (EUR)") +
   theme(plot.title = element_text(hjust = 0.5))
 
 # show LASSO scatter
@@ -559,8 +579,8 @@ pdp_n_acc_plot <- pdp_n_acc %>%
   geom_line(color= 'red', size=1) +
   ylab("Predicted price") +
   xlab("Accommodates (persons)") +
-  labs(title = "Partial Dependence Plot - Accommodates")
-scale_x_continuous(limit=c(1,7), breaks=seq(1,7,1)) +
+  labs(title = "Partial Dependence Plot - Accommodates") +
+  scale_x_continuous(limit=c(2,6), breaks=seq(2,6,1)) +
   theme(plot.title = element_text(hjust = 0.5))
 
 # show the plot
@@ -577,7 +597,7 @@ pdp_bathrooms_plot <- pdp_bathrooms %>%
   xlab("Number of Bathrooms") +
   scale_x_continuous(limit=c(0.5,4), breaks=seq(0.5,4,0.5)) +
   labs(title = "Partial Dependence Plot - Bathrooms")+
-  theme(plot.title = element_text(hjust = 0.5))
+  theme(plot.title = element_text(hjust = 0.5)) 
 
 # show the plot
 # th is is certainly an interesting shape
