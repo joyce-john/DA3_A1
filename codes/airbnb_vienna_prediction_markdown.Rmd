@@ -1,3 +1,15 @@
+---
+title: "Vienna AirBnb Price Prediction"
+author: "John Joyce"
+date: "2/2/2021"
+output: html_document
+code_download: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(digits = 5)
+
 ################################################################################
 ###################                   VIENNA                ####################
 ###################               MID-SIZE AIRBNB           ####################
@@ -10,7 +22,7 @@
 # Data Analysis for Business, Economics, and Policy
 # The function is called price_diff_by_variables
 # Check out: gabors-data-analysis.com and github.com/gabors-data-analysis/
-# Thank you Gabor for bringing energy to Zoom lectures!
+# Thank you Gabor for bring energy to Zoom lectures!
 
 
 
@@ -370,7 +382,7 @@ lm_3 <- caret::train(formula_3,
 # LASSO
 
 # give LASSO all potential x variables and let the smartypants algo decide what's important
-lasso1 <- caret::train(formula_3,
+lasso_1 <- caret::train(formula_3,
                        data = train_set,
                        method = 'glmnet',
                        preProcess = c('center', 'scale'),
@@ -600,6 +612,152 @@ pdp_bathrooms_plot <- pdp_bathrooms %>%
   theme(plot.title = element_text(hjust = 0.5)) 
 
 # show the plot
-# th is is certainly an interesting shape
+# this is certainly an interesting shape
 # finding patterns like this is the strength of machine learning
 pdp_bathrooms_plot
+
+```
+# Introduction  
+My task is to help a company offering small and mid-size apartments find the right price for their new AirBnb units in Vienna. I do this by building a model for predicting Airbnb prices with publicly available data from [InsideAirbnb](http://insideairbnb.com/get-the-data.html). We can run the model on the client's apartments to figure out what an appropriate price is for each unit.  
+  
+The Vienna AirBnb data has approximately 10.000 observations after cleaning and preparation. The **mean price** is about €68 and the **average number of reviews** is 33. However, 17% of the apartments in the data have 0 reviews, just like the client's properties.
+
+# Cleaning and Filtering  
+In the cleaning and filtering stage, I need to accomplish two goals:  
+* adjusting the sample to match this specific task  
+* getting the data ready for machine learning  
+
+### Adjusting the Sample
+The data contains 61 different property types. Our client only has one property type: **apartment**. However, if we take a closer look, we see that 87% of the data are **Entire apartment** or **private room in apartment**, which are appropriate for our sample. I keep any property which is an apartment of some kind, and I filter out anything that is not.  
+  
+The client's apartments accommodate **two to six guests**. Therefore, I filter out any apartments which are not in this range. 
+
+I also filter out apartments which have **extreme values for price**. I do this for two reasons. First, I do not believe that the client has luxury apartments, so having luxury apartments in the sample for the pricing model is not helpful. Second, these values (whether they are real values for luxury apartments or mistakes) are going to hurt the accuracy of the models. I set the cutoff at €600 per night.   
+  
+### Getting the data ready for machine learning
+The data needs to be in a clean format before it can be passed to a model. The key tasks are:  
+* dealing with NAs  
+* feature engineering with clean variable names/types  
+* dropping unneeded variables  
+
+Some important columns have NAs. When these occur in the **price** column, they must be dropped. When these occur in the columns which are used as predictive features, they can be dropped or imputed if the number is relatively small. However, there is one difficult case: the **bedrooms** column has more than 1000 NAs in the original data. This is about 10% of the data after filtering. I take a conservative approach here: I won't impute or drop these values, because there could be a systemic reason that the information is missing (ex. hosts are hiding the information because it's unfavorable). I leave these observations in the data, and I set **NA** as a **factor level** when doing prediction. 
+  
+I do a small amount of feature engineering. Every row in the **amenities** column contains a list which no machine learning tool will be able to interpret. I make dummy variables for every unique value in **amenities**, which describes all the small features that are included with an Airbnb (appliances, sound systems, patios, etc.) To get the most out of this information, I consolidate amenities which are extremely similar, such as refrigerators of different brands and different varieties of stoves. Many variables are renamed to replace spaces with underscores.  
+  
+I drop unneeded variables to make the data easier to work with. Using domain knowledge or common sense, I drop anything I am confident will not help to predict **price**. For the client's case, I also drop **review scores** columns. This is really unfortunate, because these reviews would be useful predictive features. However, the client's apartments are **new to the market** and do not have any reviews. It would not be reasonable to impute values for the client to run the prediction model: we have no idea *how accurate customers will find the listing* or *how clean they will find it* or *how much they will like it overall*. I decide to keep the **number_of_reviews** variable because we do have this information (it's zero).  
+  
+# Functional Form and Interactions
+I do not make any functional form adjustments. I examine scatterplots of numeric *x* variables and the *y* variable, **price**, with loess smoothing, and I don't find any evidence to suggest that a transformation (such a log, square, or cubic) would better accommodate the pattern of association between the variables. There are two numeric variables with skewed distributions, **number_of_reviews** and **price**, but log transformations of these variables don't seem to help fit any meaningful pattern with other variables.  
+  
+I decide to interact some variables with **neighbourhood**. The logic here is that property features be extremely important in some areas and less important in others. One crystal clear example is **free parking**. In some areas of the city, parking spots are precious. The graph below mean Airbnb prices, with and without **free parking**, by neighbourhood:  
+  
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+p1
+```
+  
+I can not test the interactions of every variable with **neighbourhood**, so I choose **free parking** and **paid parking**, as well as the basic variables which describe the listing such as the number of people it **accommodates** and whether it is **instant bookable** or not.  
+
+# Building the Potential Models
+I split the data into training and test sets. Then I train three types of models:  
+1. OLS  
+2. LASSO  
+3. Random Forest  
+  
+For the OLS models, I consider three formulas with increasing levels of complexity:  
+1. basic variables only  
+2. basic variables + all amenities  
+3. basic variables + all amenities + interactions with the **neighbourhood** variables  
+  
+For the LASSO model, I only use the most complex formula. LASSO will use a regularization parameter to zero out the least useful coefficients. The optimal value of this parameter is selected through 5-fold cross-validation.
+  
+For the Random Forest model, I make a basic version and a full version with all variables. Random Forest will select the most useful feature from a random selection of *m* variables at each tree split, so it can also handle a large variety of features. Of course, *m* is also optimized in cross-validation. However, I am curious if huge selection of variables actually helps. That is why I make two versions for the sake of comparison.    
+  
+# Model Evaluation
+I start by taking a look at the cross-fold RMSE.  
+  
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+library(kableExtra)
+results$statistics$RMSE %>% kable() %>% kableExtra::kable_styling()
+```  
+  
+LASSO and Random Forest (full model) have the lowest mean RMSE in cross-validation. The models are reasonably stable across the folds - we can see this by comparing the minimum and maximum RMSE values.  
+  
+The real question is: which model performs the best on the holdout data? I make sample predictions and calculate RMSE for each model on the test set.  
+  
+```{r, echo = FALSE, warning=FALSE, message=FALSE}
+test_set_rmse %>% kable() %>% kable_styling()
+```  
+  
+Random Forest (full model) is the clear winner. In fact, the RMSE is even lower in the holdout set than the average value for the training data. The client wants accurate pricing, and this one delivers the lowest degree of error, **therefore this is my chosen model**. The bottom line is that smaller errors mean more accurate pricing and more profit for the client.  
+  
+However, LASSO is a close second. If the client were not satisfied with a black-box model, I would offer the LASSO model as an alternative. It offers the advantage of interpretable coefficients and can be fit to new data in a fraction of the time. It has the second-lowest RMSE.  
+  
+# Model Diagnostics
+
+### Predicted VS Actual Values  
+The top two models make extremely similar predictions. The scatterplots below show the relationship between the **actual price in the holdout data** and the **price predicted by the models**. The plots do not help us distinguish the models, but they do offer some other insight: prices are usually less than 150 Euros, and the models tend to underestimate prices higher than that.  
+
+```{r, echo = FALSE, warning=FALSE, message=FALSE}
+rf_2_pred_vs_actual  
+lasso_pred_vs_actual
+```  
+   
+### Top 10 LASSO Coefficients  
+The LASSO model has 184 non-zero coefficients, but many of them are very small. The top ten coefficients give us an idea about which variables are the most useful in explaining variation in price.
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+
+# remove intercept from list
+lasso_top10_coef_clean <-
+    lasso_coeffs %>% 
+    arrange(desc(coefficient)) %>% 
+    head(11) %>% 
+    tail(10)
+
+# rename ugly vars
+lasso_top10_coef_clean[1,1] <- 'Innere Stadt * bathrooms'
+lasso_top10_coef_clean[7,1] <- 'Innere Stadt * bedrooms3'
+
+# show coefficients
+lasso_top10_coef_clean %>% kable(row.names = F) %>% kable_styling()
+
+```  
+  
+### Top 10 of Variable Importance for Random Forest  
+*Variable importance* describes a variable's contribution to reducing overall RMSE in the Random Forest model. I examine the *percentage of total RMSE reduction* attributed to each variable, as it's a bit easier to interpret. The top 10 variables - by this metric of *variable importance* - are shown in the chart below:  
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+rf_2_var_imp_plot
+```  
+  
+Although LASSO coefficients and variable importance values are not directly comparable, it is interesting to see how the top 10 lists from both metrics share many similarities.    
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+# make a dataframe for comparing most important variables
+top10_compare <-
+  data.frame('LASSO' = lasso_top10_coef_clean$variable, 
+             'Random Forest' = rf_2_var_imp_df$varname[1:10])
+
+top10_compare %>% kable() %>% kable_styling()
+```  
+  
+### Partial Dependence Plots for Random Forest  
+  
+Though the Random Forest model does not have coefficients, a partial dependence plot can provide  insight about the relationship between an *x* variable and the target *y*. The plot below shows the average value for **price** for different values of **accommodates**, conditional on all other *x* variables.  
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+pdp_n_acc_plot
+```  
+  
+Of course, the real strength of machine learning is its ability to uncover atypical patterns. The partial dependence plot for the **bathrooms** variable has an unusual shape.  
+  
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+pdp_bathrooms_plot
+```  
+  
+If the client were skeptical of a black-box model like Random Forest and wanted some assurance that the model operated in a reasonable way, I would share the partial dependence plots for the most important variables. In the case of a bad prediction, these plots may offer some insight into which variables threw the model off-target.  
+
+# Conclusion  
+The model I built is decent, but not perfect. The best model achieved an **RMSE of 36.349**, which is somewhat lower than the RMSE achieved in the London case study, but for a completely different city, range of values, and business case. My model has a narrower (easier) task: predicting prices only for typical apartments. The models in the London case study faced a broader range of values in the target  **price** variable and in other *x* variables.  
+
+It may have been possible to improve my model's performance further by including information from the various **review scores** variables, but I am highly skeptical of the idea of imputing these values for the client's apartments. It would have made the model look better on paper, but may have resulted in worse predictions for the client if we incorrectly guess what the client's **review scores** should be.  
+  
+As for the client's use of the model: I would propose using the model as a starting point for setting prices. It may be a valuable complement to the client's domain expertise, but it is only a decent performer *on average*, and it would be wise to consider individual price adjustments if the prediction appears unreasonable.
+  
